@@ -10,6 +10,18 @@ build/
 
 # Coverage reports
 coverage/
+*.lcov
+.nyc_output/
+
+# Test reports
+test-report.xml
+junit.xml
+report.*.json
+
+# SonarQube
+.scannerwork/
+.sonar/
+sonar-report.json
 
 # IDE and editor files
 .idea/

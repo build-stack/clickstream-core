@@ -12,6 +12,13 @@ module.exports = {
     '!src/**/__tests__/**',
   ],
   coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'lcov'],
+  coverageReporters: ['text', 'lcov', 'cobertura'],
+  reporters: [
+    'default',
+    ['jest-junit', {
+      outputDirectory: '.',
+      outputName: 'test-report.xml',
+    }]
+  ],
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
 }; 
