@@ -10,19 +10,20 @@ export interface ClickstreamConfig {
   maskTextSelector?: string;
 }
 
-export interface Event {
+export interface ClickstreamEvent {
   timestamp: number;
-  type: 'click' | 'mousemove' | 'scroll' | 'input' | 'view';
+  type: 'click' | 'mousemove' | 'scroll' | 'input' | 'view' | 'unknown';
   target?: string;
-  data?: unknown; // replace with eventWithTime | eventWithoutTime
+  data?: Record<string, unknown>;
   sessionId: string;
 }
 
 export class ClickstreamTracker {
-  private events: Event[] = [];
+  private events: ClickstreamEvent[] = [];
   private sessionId: string;
   private stopFn?: () => void;
   private config: ClickstreamConfig;
+  private isRecording: boolean = false;
 
   constructor(config: ClickstreamConfig = {}) {
     this.sessionId = this.generateSessionId();
@@ -38,17 +39,19 @@ export class ClickstreamTracker {
       return;
     }
 
+    this.isRecording = true;
     this.stopFn = rrweb.record({
       emit: (event: eventWithTime) => {
-        if (event.type === 2) { // Full snapshot
+        // todo(1): check if we need not to record full snapshot.
+        if (!this.isRecording || event.type === 2) { // Don't record if stopped or if it's a full snapshot
           return;
         }
 
-        const clickstreamEvent: Event = {
+        const clickstreamEvent: ClickstreamEvent = {
           timestamp: event.timestamp,
           type: this.mapEventType(event.type),
           target: this.getEventTarget(event),
-          data: event.data as unknown,
+          data: event.data as Record<string, unknown>,
           sessionId: this.sessionId,
         };
 
@@ -67,13 +70,14 @@ export class ClickstreamTracker {
   }
 
   public stop(): void {
+    this.isRecording = false;
     if (this.stopFn) {
       this.stopFn();
       this.stopFn = undefined;
     }
   }
 
-  public getEvents(): Event[] {
+  public getEvents(): ClickstreamEvent[] {
     return [...this.events];
   }
 
@@ -85,7 +89,7 @@ export class ClickstreamTracker {
     return this.sessionId;
   }
 
-  private mapEventType(rrwebType: number): Event['type'] {
+  private mapEventType(rrwebType: number): ClickstreamEvent['type'] {
     switch (rrwebType) {
       case 3: // Mouse movement
         return 'mousemove';
@@ -98,7 +102,8 @@ export class ClickstreamTracker {
       case 7: // Click
         return 'click';
       default:
-        return 'click';
+        console.warn(`Unknown rrweb event type: ${rrwebType}`);
+        return 'unknown';
     }
   }
 
@@ -114,4 +119,4 @@ export class ClickstreamTracker {
   private generateSessionId(): string {
     return Math.random().toString(36).substring(2) + Date.now().toString(36);
   }
-} 
+}

@@ -1,14 +1,29 @@
 import { ClickstreamTracker } from '../index';
+import type { record } from 'rrweb';
+
+jest.mock('rrweb', () => {
+  const mockRecord = jest.fn().mockImplementation(({ emit }) => {
+    const emitRef = { current: emit };
+    return () => {
+      emitRef.current = () => {}; // No-op after stopping
+    };
+  });
+  return { record: mockRecord };
+});
 
 describe('ClickstreamTracker', () => {
   let tracker: ClickstreamTracker;
+  let mockRecord: jest.Mock;
 
   beforeEach(() => {
     tracker = new ClickstreamTracker();
+    mockRecord = (jest.requireMock('rrweb') as { record: jest.Mock }).record;
+    mockRecord.mockClear();
   });
 
   afterEach(() => {
     tracker.stop();
+    jest.clearAllMocks();
   });
 
   it('should initialize with a session ID', () => {
@@ -19,67 +34,71 @@ describe('ClickstreamTracker', () => {
 
   it('should start recording events', async () => {
     tracker.start();
-    // Simulate a click event
-    const clickEvent = new MouseEvent('click', {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-    });
-    document.body.dispatchEvent(clickEvent);
     
-    // Wait for the event to be processed
-    await new Promise<void>(resolve => {
-      setTimeout(() => {
-        const events = tracker.getEvents();
-        expect(events.length).toBeGreaterThan(0);
-        expect(events[0].type).toBe('click');
-        resolve();
-      }, 500); // Increased timeout
+    // Get the emit function from the mock
+    const emit = mockRecord.mock.calls[0][0].emit;
+    
+    // Simulate a click event
+    emit({
+      type: 7,
+      timestamp: Date.now(),
+      data: {
+        target: 'button',
+      },
     });
-  }, 10000); // Test timeout
+    
+    const events = tracker.getEvents();
+    expect(events.length).toBe(1);
+    expect(events[0].type).toBe('click');
+  });
 
   it('should stop recording events', async () => {
     tracker.start();
+    const emit = mockRecord.mock.calls[0][0].emit;
+    
+    // Record an event before stopping
+    emit({
+      type: 7,
+      timestamp: Date.now(),
+      data: {
+        target: 'button',
+      },
+    });
+    
     tracker.stop();
     
-    // Simulate a click event after stopping
-    const clickEvent = new MouseEvent('click', {
-      bubbles: true,
-      cancelable: true,
-      view: window,
+    // Try to record another event after stopping
+    emit({
+      type: 7,
+      timestamp: Date.now(),
+      data: {
+        target: 'button',
+      },
     });
-    document.body.dispatchEvent(clickEvent);
     
-    // Wait for any potential events to be processed
-    await new Promise<void>(resolve => {
-      setTimeout(() => {
-        const events = tracker.getEvents();
-        expect(events.length).toBe(0);
-        resolve();
-      }, 500);
-    });
-  }, 10000);
+    const events = tracker.getEvents();
+    expect(events.length).toBe(1); // Should only have the first event
+  });
 
   it('should clear events', async () => {
     tracker.start();
-    // Simulate a click event
-    const clickEvent = new MouseEvent('click', {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-    });
-    document.body.dispatchEvent(clickEvent);
     
-    // Wait for the event to be processed
-    await new Promise<void>(resolve => {
-      setTimeout(() => {
-        tracker.clearEvents();
-        const events = tracker.getEvents();
-        expect(events.length).toBe(0);
-        resolve();
-      }, 500);
+    // Get the emit function from the mock
+    const emit = mockRecord.mock.calls[0][0].emit;
+    
+    // Simulate a click event
+    emit({
+      type: 7,
+      timestamp: Date.now(),
+      data: {
+        target: 'button',
+      },
     });
-  }, 10000);
+    
+    tracker.clearEvents();
+    const events = tracker.getEvents();
+    expect(events.length).toBe(0);
+  });
 
   it('should respect configuration options', () => {
     const config = {
@@ -92,8 +111,34 @@ describe('ClickstreamTracker', () => {
     tracker = new ClickstreamTracker(config);
     tracker.start();
     
-    // Verify configuration is applied
+    expect(mockRecord).toHaveBeenCalledWith(expect.objectContaining({
+      sampling: {
+        mousemove: 0.5,
+        scroll: 0.5,
+      },
+      blockClass: /no-track/,
+      blockSelector: '.private',
+      maskAllInputs: true,
+    }));
+  });
+
+  it('should handle unknown event types', () => {
+    tracker.start();
+    
+    // Get the emit function from the mock
+    const emit = mockRecord.mock.calls[0][0].emit;
+    
+    // Simulate an unknown event type
+    emit({
+      type: 999, // Unknown event type
+      timestamp: Date.now(),
+      data: {
+        target: 'test',
+      },
+    });
+
     const events = tracker.getEvents();
-    expect(events).toBeDefined();
+    expect(events.length).toBe(1);
+    expect(events[0].type).toBe('unknown');
   });
 }); 
