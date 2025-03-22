@@ -6,6 +6,14 @@
 * enhance S3 deployment workflow with semantic-release integration and dynamic .releaserc.json creation ([9e0d9c8](https://github.com/build-stack/clickstream-core/commit/9e0d9c81f93d901563ec2fe8c8b33686b130c100))
 * initial commit ([a0a5833](https://github.com/build-stack/clickstream-core/commit/a0a5833e6392089489403eba4011bfc77fb21539))
 
+# 1.0.0 (2025-03-22)
+
+
+### Features
+
+* enhance S3 deployment workflow with semantic-release integration and dynamic .releaserc.json creation ([9e0d9c8](https://github.com/build-stack/clickstream-core/commit/9e0d9c81f93d901563ec2fe8c8b33686b130c100))
+* initial commit ([a0a5833](https://github.com/build-stack/clickstream-core/commit/a0a5833e6392089489403eba4011bfc77fb21539))
+
 ## [1.0.1](https://github.com/build-stack/clickstream-core/compare/v1.0.0...v1.0.1) (2025-03-22)
 
 
