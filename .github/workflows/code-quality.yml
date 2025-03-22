@@ -2,9 +2,9 @@ name: Code Quality
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, experimental ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, experimental ]
 
 jobs:
   lint-and-test:
@@ -28,15 +28,39 @@ jobs:
         run: npm run test:coverage
         
       - name: Upload coverage report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v2
         with:
           name: coverage-report
           path: coverage/
           
       - name: Check test coverage
         run: |
-          COVERAGE=$(cat coverage/coverage-summary.json | jq '.total.lines.pct')
-          echo "Total coverage: $COVERAGE%"
-          if (( $(echo "$COVERAGE < 60" | bc -l) )); then
-            echo "::warning::Test coverage is below 60%"
+          # This step checks the test coverage percentage and issues a warning if it's below 60%
+          
+          # First, try to find coverage/coverage-summary.json (Jest format)
+          if [ -f coverage/coverage-summary.json ]; then
+            # Extract the line coverage percentage using jq
+            COVERAGE=$(cat coverage/coverage-summary.json | jq '.total.lines.pct')
+            echo "Total coverage: $COVERAGE%"
+            # Compare coverage to threshold (60%)
+            if (( $(echo "$COVERAGE < 60" | bc -l) )); then
+              echo "::warning::Test coverage is below 60%"
+            fi
+          
+          # If not found, try to find coverage/lcov.info (alternative format)
+          elif [ -f coverage/lcov.info ]; then
+            # Install lcov to parse the lcov.info file
+            sudo apt-get install -y lcov
+            # Extract the line coverage percentage using lcov and text processing
+            COVERAGE=$(lcov --summary coverage/lcov.info | grep "lines" | awk '{print $4}' | cut -d'%' -f1)
+            echo "Total coverage: $COVERAGE%"
+            # Compare coverage to threshold (60%)
+            if (( $(echo "$COVERAGE < 60" | bc -l) )); then
+              echo "::warning::Test coverage is below 60%"
+            fi
+          
+          # If neither file is found, issue a warning
+          else
+            echo "::warning::Could not find coverage report file"
           fi 
+
