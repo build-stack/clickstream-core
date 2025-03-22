@@ -1,0 +1,162 @@
+name: Deploy to S3
+
+on:
+  push:
+    branches: [ main ]
+  # Allow manual trigger
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+env:
+  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Setup .npmrc file
+        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+      
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        
+      - name: Get next version from semantic-release
+        id: semantic
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Install semantic-release and plugins locally
+          npm install --no-save semantic-release@17.4.7 @semantic-release/git@9.0.1 @semantic-release/changelog@5.0.1 semantic-release-s3@1.14.0
+          
+          # Create temporary .releaserc.json if it doesn't exist
+          if [ ! -f ".releaserc.json" ]; then
+            echo "Creating temporary .releaserc.json configuration..."
+            echo '{' > .releaserc.json
+            echo '  "branches": ["main"],' >> .releaserc.json
+            echo '  "plugins": [' >> .releaserc.json
+            echo '    ["@semantic-release/commit-analyzer", {' >> .releaserc.json
+            echo '      "preset": "angular"' >> .releaserc.json 
+            echo '    }],' >> .releaserc.json
+            echo '    "@semantic-release/release-notes-generator",' >> .releaserc.json
+            echo '    "@semantic-release/changelog",' >> .releaserc.json
+            echo '    "@semantic-release/npm",' >> .releaserc.json
+            echo '    ["@semantic-release/github", {' >> .releaserc.json
+            echo '      "assets": [' >> .releaserc.json
+            echo '        {"path": "dist/version.json", "label": "Version Information"},' >> .releaserc.json
+            echo '        {"path": "dist/package.json", "label": "Package Configuration"}' >> .releaserc.json
+            echo '      ],' >> .releaserc.json
+            echo '      "successComment": false,' >> .releaserc.json
+            echo '      "failComment": false,' >> .releaserc.json
+            echo '      "failTitle": false,' >> .releaserc.json
+            echo '      "labels": false,' >> .releaserc.json
+            echo '      "releasedLabels": false' >> .releaserc.json
+            echo '    }],' >> .releaserc.json
+            echo '    "@semantic-release/git",' >> .releaserc.json
+            echo '    ["semantic-release-s3", {' >> .releaserc.json
+            echo '      "config": {' >> .releaserc.json
+            echo "        \"bucket\": \"${S3_BUCKET}\"," >> .releaserc.json
+            echo "        \"region\": \"${AWS_REGION}\"" >> .releaserc.json
+            echo '      }' >> .releaserc.json
+            echo '    }]' >> .releaserc.json
+            echo '  ]' >> .releaserc.json
+            echo '}' >> .releaserc.json
+          fi
+          
+          # Set environment variables for the config
+          export S3_BUCKET="${{ secrets.S3_BUCKET_NAME }}"
+          export AWS_REGION="${{ secrets.AWS_REGION }}"
+          
+          # Run semantic-release dry-run with debug output
+          echo "Running semantic-release dry run..."
+          npx semantic-release --dry-run > semantic-release-output.txt 2>&1
+          cat semantic-release-output.txt
+          
+          # Try to extract version using multiple patterns
+          NEXT_VERSION=$(cat semantic-release-output.txt | grep -oP 'The next release version is \K[0-9]+\.[0-9]+\.[0-9]+' || cat semantic-release-output.txt | grep -oP 'determined next release version: \K[0-9]+\.[0-9]+\.[0-9]+' || cat semantic-release-output.txt | grep -oP 'next release version is \K[0-9]+\.[0-9]+\.[0-9]+')
+          
+          echo "Extracted version: $NEXT_VERSION"
+          
+          # If no version was found, fail the build
+          if [ -z "$NEXT_VERSION" ]; then
+            echo "::error::No new version detected by semantic-release."
+            echo "Make sure you have commits with conventional format (feat:, fix:, etc.) and your branch is up to date."
+            echo "Full semantic-release output:"
+            cat semantic-release-output.txt
+            exit 1
+          fi
+          
+          echo "Next version determined as: $NEXT_VERSION"
+          echo "version=$NEXT_VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Build package
+        run: npm run build
+      
+      - name: Prepare package for S3
+        run: |
+          VERSION=${{ steps.semantic.outputs.version }}
+          echo "Preparing package with version $VERSION"
+          
+          # Create dist folder if it doesn't exist
+          mkdir -p dist
+          
+          # Create package.json with version in dist
+          jq ".version = \"$VERSION\"" package.json > dist/package.json
+          
+          # Create version file
+          echo "{\"version\": \"$VERSION\", \"buildDate\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"}" > dist/version.json
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Deploy to S3
+        env:
+          S3_BUCKET: ${{ secrets.S3_BUCKET_NAME }}
+          VERSION: ${{ steps.semantic.outputs.version }}
+        run: |
+          # Deploy to versioned folder
+          aws s3 cp dist/ s3://$S3_BUCKET/clickstream-core/$VERSION/ --recursive
+          
+          # Also deploy to latest folder
+          aws s3 cp dist/ s3://$S3_BUCKET/clickstream-core/latest/ --recursive
+          
+          echo "Deployed version $VERSION to S3 bucket $S3_BUCKET"
+      
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          # Skip semantic-release to allow for Git history reset
+          echo "Skipping semantic-release execution to allow for Git history reset"
+          exit 0
+          
+      - name: Upload distribution to release
+        if: github.ref == 'refs/heads/main' && steps.semantic.outputs.version != '0.0.0'
+        run: |
+          # Skip this step to allow for Git history reset
+          echo "Skipping release asset upload to allow for Git history reset"
+          exit 0 
