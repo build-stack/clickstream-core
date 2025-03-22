@@ -150,13 +150,52 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          # Skip semantic-release to allow for Git history reset
-          echo "Skipping semantic-release execution to allow for Git history reset"
-          exit 0
+          VERSION=${{ steps.semantic.outputs.version }}
+          if [ "$VERSION" != "0.0.0" ]; then
+            # Install semantic-release locally if not already installed
+            npm list semantic-release || npm install --no-save semantic-release@17.4.7 @semantic-release/git@9.0.1 @semantic-release/changelog@5.0.1 semantic-release-s3@1.14.0
+            
+            # Ensure .releaserc.json exists
+            if [ ! -f ".releaserc.json" ]; then
+              echo "Creating .releaserc.json for release..."
+              echo '{' > .releaserc.json
+              echo '  "branches": ["main"],' >> .releaserc.json
+              echo '  "plugins": [' >> .releaserc.json
+              echo '    ["@semantic-release/commit-analyzer", {' >> .releaserc.json
+              echo '      "preset": "angular"' >> .releaserc.json 
+              echo '    }],' >> .releaserc.json
+              echo '    "@semantic-release/release-notes-generator",' >> .releaserc.json
+              echo '    "@semantic-release/changelog",' >> .releaserc.json
+              echo '    "@semantic-release/npm",' >> .releaserc.json
+              echo '    ["@semantic-release/github", {' >> .releaserc.json
+              echo '      "assets": [' >> .releaserc.json
+              echo '        {"path": "dist/version.json", "label": "Version Information"},' >> .releaserc.json
+              echo '        {"path": "dist/package.json", "label": "Package Configuration"}' >> .releaserc.json
+              echo '      ],' >> .releaserc.json
+              echo '      "successComment": false,' >> .releaserc.json
+              echo '      "failComment": false,' >> .releaserc.json
+              echo '      "failTitle": false,' >> .releaserc.json
+              echo '      "labels": false,' >> .releaserc.json
+              echo '      "releasedLabels": false' >> .releaserc.json
+              echo '    }],' >> .releaserc.json
+              echo '    "@semantic-release/git",' >> .releaserc.json
+              echo '    ["semantic-release-s3", {' >> .releaserc.json
+              echo '      "config": {' >> .releaserc.json
+              echo "        \"bucket\": \"${S3_BUCKET}\"," >> .releaserc.json
+              echo "        \"region\": \"${AWS_REGION}\"" >> .releaserc.json
+              echo '      }' >> .releaserc.json
+              echo '    }]' >> .releaserc.json
+              echo '  ]' >> .releaserc.json
+              echo '}' >> .releaserc.json
+            fi
+            
+            # Set environment variables for the config
+            export S3_BUCKET="${{ secrets.S3_BUCKET_NAME }}"
+            export AWS_REGION="${{ secrets.AWS_REGION }}"
+            
+            npx semantic-release
+          else
+            echo "No version change detected, skipping release"
+          fi
           
-      - name: Upload distribution to release
-        if: github.ref == 'refs/heads/main' && steps.semantic.outputs.version != '0.0.0'
-        run: |
-          # Skip this step to allow for Git history reset
-          echo "Skipping release asset upload to allow for Git history reset"
-          exit 0 
+      # End of workflow 
