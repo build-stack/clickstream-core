@@ -34,7 +34,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Install semantic-release and plugin for S3
-          npm install -g semantic-release @semantic-release/git @semantic-release/changelog semantic-release-s3
+          npm install -g semantic-release@17.4.7 @semantic-release/git@9.0.1 @semantic-release/changelog@5.0.1
+          npm install -g semantic-release-s3@1.14.0
           
           # Dry run to get next version
           NEXT_VERSION=$(npx semantic-release --dry-run | grep -oP 'The next release version is \K[0-9]+\.[0-9]+\.[0-9]+' || echo "0.0.0")
