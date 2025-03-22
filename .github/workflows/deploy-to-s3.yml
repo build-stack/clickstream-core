@@ -1,0 +1,103 @@
+name: Deploy to S3
+
+on:
+  push:
+    branches: [ main ]
+  # Allow manual trigger
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Get next version from semantic-release
+        id: semantic
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Install semantic-release and plugin for S3
+          npm install -g semantic-release@17.4.7 @semantic-release/git@9.0.1 @semantic-release/changelog@5.0.1
+          npm install -g semantic-release-s3@1.14.0
+          
+          # Dry run to get next version
+          NEXT_VERSION=$(npx semantic-release --dry-run | grep -oP 'The next release version is \K[0-9]+\.[0-9]+\.[0-9]+' || echo "0.0.0")
+          echo "Next version determined as: $NEXT_VERSION"
+          echo "version=$NEXT_VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Build package
+        run: npm run build
+      
+      - name: Prepare package for S3
+        run: |
+          VERSION=${{ steps.semantic.outputs.version }}
+          echo "Preparing package with version $VERSION"
+          
+          # Create dist folder if it doesn't exist
+          mkdir -p dist
+          
+          # Create package.json with version in dist
+          jq ".version = \"$VERSION\"" package.json > dist/package.json
+          
+          # Create version file
+          echo "{\"version\": \"$VERSION\", \"buildDate\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"}" > dist/version.json
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1 # Change to your preferred region
+      
+      - name: Deploy to S3
+        env:
+          S3_BUCKET: ${{ secrets.S3_BUCKET_NAME }}
+          VERSION: ${{ steps.semantic.outputs.version }}
+        run: |
+          # Deploy to versioned folder
+          aws s3 cp dist/ s3://$S3_BUCKET/clickstream-core/$VERSION/ --recursive
+          
+          # Also deploy to latest folder
+          aws s3 cp dist/ s3://$S3_BUCKET/clickstream-core/latest/ --recursive
+          
+          echo "Deployed version $VERSION to S3 bucket $S3_BUCKET"
+      
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${{ steps.semantic.outputs.version }}
+          if [ "$VERSION" != "0.0.0" ]; then
+            npx semantic-release
+          else
+            echo "No version change detected, skipping release"
+          fi
+          
+      - name: Upload distribution to release
+        if: github.ref == 'refs/heads/main' && steps.semantic.outputs.version != '0.0.0'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/**/*
+          tag_name: v${{ steps.semantic.outputs.version }}
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+          generate_release_notes: true 

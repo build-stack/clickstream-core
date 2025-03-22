@@ -33,7 +33,7 @@ jobs:
           name: coverage-report
           path: coverage/
           
-      - name: Check test coverage
+      - name: Check test coverage # (TODO: remove/refactor this step)
         run: |
           # This step checks the test coverage percentage and issues a warning if it's below 60%
           

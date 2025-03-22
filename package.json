@@ -16,7 +16,8 @@
     "lint:fix": "eslint . --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "semantic-release": "semantic-release"
   },
   "keywords": [
     "clickstream",
@@ -28,6 +29,8 @@
   "license": "ISC",
   "devDependencies": {
     "@rrweb/types": "^2.0.0-alpha.18",
+    "@semantic-release/changelog": "^5.0.1",
+    "@semantic-release/git": "^9.0.1",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.11.24",
     "@typescript-eslint/eslint-plugin": "^7.1.0",
@@ -39,6 +42,8 @@
     "jest-environment-jsdom": "^29.7.0",
     "jest-junit": "^16.0.0",
     "prettier": "^3.2.5",
+    "semantic-release": "^17.4.7",
+    "semantic-release-s3": "^1.14.0",
     "sonarqube-scanner": "^4.2.8",
     "ts-jest": "^29.1.2",
     "ts-loader": "^9.5.1",
