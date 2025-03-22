@@ -1,0 +1,4 @@
+# Ignore build output directory
+dist/
+coverage/
+node_modules/ 

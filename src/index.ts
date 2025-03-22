@@ -1,6 +1,5 @@
-import * as rrweb from 'rrweb';
-import type { eventWithTime, blockClass, maskTextClass } from '@rrweb/types';
-import { EventType, IncrementalSource } from 'rrweb';
+import * as rrweb from "rrweb";
+import type { eventWithTime, blockClass, maskTextClass } from "@rrweb/types";
 
 // Define EventType and IncrementalSource constants for usage when imports might be mocked
 const EVENT_TYPE = {
@@ -10,7 +9,7 @@ const EVENT_TYPE = {
   IncrementalSnapshot: 3,
   Meta: 4,
   Custom: 5,
-  Plugin: 6
+  Plugin: 6,
 };
 
 const INCREMENTAL_SOURCE = {
@@ -24,7 +23,7 @@ const INCREMENTAL_SOURCE = {
   MediaInteraction: 7,
   StyleSheetRule: 8,
   StyleDeclaration: 9,
-  Drag: 12
+  Drag: 12,
 };
 
 export interface ClickstreamConfig {
@@ -38,7 +37,21 @@ export interface ClickstreamConfig {
 
 export interface ClickstreamEvent {
   timestamp: number;
-  type: 'click' | 'mousemove' | 'touchmove' | 'drag' | 'scroll' | 'input' | 'view' | 'dom-content-loaded' | 'load' | 'meta' | 'custom' | 'plugin' | 'resize' | 'unknown';
+  type:
+    | "click"
+    | "mousemove"
+    | "touchmove"
+    | "drag"
+    | "scroll"
+    | "input"
+    | "view"
+    | "dom-content-loaded"
+    | "load"
+    | "meta"
+    | "custom"
+    | "plugin"
+    | "resize"
+    | "unknown";
   target?: string;
   data?: Record<string, unknown>;
   sessionId: string;
@@ -79,18 +92,15 @@ export class ClickstreamTracker {
     }
 
     this.isRecording = true;
-    
-    // Track the last mousemove event time for throttling
-    let lastMouseMoveTime = 0;
-    const mouseMoveThrottleMs = 500; // Throttle mousemove events to once per 500ms
-    
+
     this.stopFn = rrweb.record({
       emit: (event: eventWithTime) => {
         // todo(1): check if we need not to record full snapshot.
-        if (!this.isRecording || event.type === 2) { // Don't record if stopped or if it's a full snapshot
+        if (!this.isRecording || event.type === 2) {
+          // Don't record if stopped or if it's a full snapshot
           return;
         }
-        
+
         const clickstreamEvent: ClickstreamEvent = {
           timestamp: event.timestamp,
           type: this.mapEventType(event),
@@ -155,67 +165,67 @@ export class ClickstreamTracker {
    * @returns The corresponding ClickstreamEvent type
    * @private
    */
-  private mapEventType(event: eventWithTime): ClickstreamEvent['type'] {
+  private mapEventType(event: eventWithTime): ClickstreamEvent["type"] {
     // Add the original event type for debugging
-    if (event.data && typeof event.data === 'object') {
+    if (event.data && typeof event.data === "object") {
       const data = event.data as Record<string, unknown>;
       data.rrwebEventType = event.type;
     }
 
     // Special case for tests that simulate click events with type 7
     if ((event.type as unknown as number) === 7) {
-      return 'click';
+      return "click";
     }
 
     // Handle each event type explicitly
     if (event.type === EVENT_TYPE.IncrementalSnapshot) {
-      if (event.data && typeof event.data === 'object') {
+      if (event.data && typeof event.data === "object") {
         const data = event.data as Record<string, unknown>;
         const source = data.source as number;
-        
+
         // Map IncrementalSource types using our constants
         switch (source) {
           case INCREMENTAL_SOURCE.MouseMove:
-            return 'mousemove';
+            return "mousemove";
           case INCREMENTAL_SOURCE.TouchMove:
-            return 'touchmove';
+            return "touchmove";
           case INCREMENTAL_SOURCE.Drag:
-            return 'drag';
+            return "drag";
           case INCREMENTAL_SOURCE.Scroll:
-            return 'scroll';
+            return "scroll";
           case INCREMENTAL_SOURCE.ViewportResize:
-            return 'resize';
+            return "resize";
           case INCREMENTAL_SOURCE.Input:
-            return 'input';
+            return "input";
           case INCREMENTAL_SOURCE.MouseInteraction:
-            return 'click';
+            return "click";
           case INCREMENTAL_SOURCE.MediaInteraction:
-            return 'input';
+            return "input";
           default:
             console.warn(`Unhandled IncrementalSource: ${source}`);
-            return 'unknown';
+            return "unknown";
         }
       }
-      return 'unknown';
+      return "unknown";
     }
-    
+
     // Map EventType values using our constants
     switch (true) {
       case event.type === EVENT_TYPE.DomContentLoaded:
-        return 'dom-content-loaded';
+        return "dom-content-loaded";
       case event.type === EVENT_TYPE.Load:
-        return 'load';
+        return "load";
       case event.type === EVENT_TYPE.Meta:
-        return 'meta';
+        return "meta";
       case event.type === EVENT_TYPE.Custom:
-        return 'custom';
+        return "custom";
       case event.type === EVENT_TYPE.Plugin:
-        return 'plugin';
+        return "plugin";
       case event.type === EVENT_TYPE.FullSnapshot:
-        return 'view';
+        return "view";
       default:
         console.warn(`Unknown rrweb event type: ${event.type}`);
-        return 'unknown';
+        return "unknown";
     }
   }
 
@@ -226,7 +236,7 @@ export class ClickstreamTracker {
    * @private
    */
   private getEventTarget(event: eventWithTime): string | undefined {
-    if (!event.data || typeof event.data !== 'object') {
+    if (!event.data || typeof event.data !== "object") {
       return undefined;
     }
 
