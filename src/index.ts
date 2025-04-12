@@ -34,7 +34,7 @@ export class ClickstreamTracker {
    * @param config - Configuration options for the tracker
    */
   constructor(config: ClickstreamConfig = {}) {
-    this.sessionId = this.generateSessionId();
+    this.sessionId = this.getOrCreateSessionId();
     this.config = {
       samplingRate: 1,
       maskAllInputs: true,
@@ -142,6 +142,37 @@ export class ClickstreamTracker {
         console.error('Error sending events to remote endpoint:', error);
       });
     }
+  }
+
+  /**
+   * Gets an existing sessionId from sessionStorage or creates a new one if none exists.
+   * @returns The session identifier
+   * @private
+   */
+  private getOrCreateSessionId(): string {
+    const storageKey = 'clickstream-session-id';
+    
+    // Try to get existing sessionId from sessionStorage
+    try {
+      const existingId = sessionStorage.getItem(storageKey);
+      if (existingId) {
+        return existingId;
+      }
+    } catch (error) {
+      console.error('Error reading sessionId from sessionStorage:', error);
+    }
+    
+    // Generate a new sessionId if none exists
+    const newId = this.generateSessionId();
+    
+    // Store the new sessionId in sessionStorage
+    try {
+      sessionStorage.setItem(storageKey, newId);
+    } catch (error) {
+      console.error('Error saving sessionId to sessionStorage:', error);
+    }
+    
+    return newId;
   }
 
   /**
