@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/build-stack/clickstream-core/compare/v1.2.0...v1.2.1) (2025-04-12)
+
+
+### Bug Fixes
+
+* implement session management with getOrCreateSessionId method in ClickstreamTracker ([d4afdbc](https://github.com/build-stack/clickstream-core/commit/d4afdbcc6af5997894f3b68ec79845299a678a5a))
+
 # [1.2.0](https://github.com/build-stack/clickstream-core/compare/v1.1.0...v1.2.0) (2025-04-12)
 
 
