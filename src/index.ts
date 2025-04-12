@@ -10,10 +10,12 @@ export interface ClickstreamConfig {
   maskTextSelector?: string;
   remoteEndpoint?: string;
   maxEvents?: number;
+  environmentId?: string;
 }
 
-type eventWithTimeAndSessionId = eventWithTime & {
+type AnnotatedEvent = eventWithTime & {
   sessionId: string;
+  environmentId?: string;
 };
 
 /**
@@ -21,7 +23,7 @@ type eventWithTimeAndSessionId = eventWithTime & {
  * using the rrweb library for recording browser events.
  */
 export class ClickstreamTracker {
-  private events: SessionStorageList<eventWithTimeAndSessionId>;
+  private events: SessionStorageList<AnnotatedEvent>;
   private sessionId: string;
   private stopFn?: () => void;
   private config: ClickstreamConfig;
@@ -37,6 +39,7 @@ export class ClickstreamTracker {
       samplingRate: 1,
       maskAllInputs: true,
       maxEvents: 10,
+      environmentId: window.location.hostname, // Default to current hostname
       ...config,
     };
     this.events = new SessionStorageList('clickstream-events', this.config.maxEvents);
@@ -69,6 +72,7 @@ export class ClickstreamTracker {
         this.events.push({
           ...event,
           sessionId: this.sessionId,
+          environmentId: this.config.environmentId
         });
       },
       sampling: {
