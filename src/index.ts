@@ -1,31 +1,6 @@
 import * as rrweb from "rrweb";
 import type { eventWithTime, blockClass, maskTextClass } from "@rrweb/types";
 
-// Define EventType and IncrementalSource constants for usage when imports might be mocked
-const EVENT_TYPE = {
-  DomContentLoaded: 0,
-  Load: 1,
-  FullSnapshot: 2,
-  IncrementalSnapshot: 3,
-  Meta: 4,
-  Custom: 5,
-  Plugin: 6,
-};
-
-const INCREMENTAL_SOURCE = {
-  Mutation: 0,
-  MouseMove: 1,
-  MouseInteraction: 2,
-  Scroll: 3,
-  ViewportResize: 4,
-  Input: 5,
-  TouchMove: 6,
-  MediaInteraction: 7,
-  StyleSheetRule: 8,
-  StyleDeclaration: 9,
-  Drag: 12,
-};
-
 export interface ClickstreamConfig {
   samplingRate?: number;
   blockClass?: blockClass;
@@ -33,36 +8,20 @@ export interface ClickstreamConfig {
   maskAllInputs?: boolean;
   maskTextClass?: maskTextClass;
   maskTextSelector?: string;
+  remoteEndpoint?: string;
+  maxEvents?: number;
 }
 
-export interface ClickstreamEvent {
-  timestamp: number;
-  type:
-    | "click"
-    | "mousemove"
-    | "touchmove"
-    | "drag"
-    | "scroll"
-    | "input"
-    | "view"
-    | "dom-content-loaded"
-    | "load"
-    | "meta"
-    | "custom"
-    | "plugin"
-    | "resize"
-    | "unknown";
-  target?: string;
-  data?: Record<string, unknown>;
+type eventWithTimeAndSessionId = eventWithTime & {
   sessionId: string;
-}
+};
 
 /**
  * A class that tracks user interactions and creates a clickstream of events
  * using the rrweb library for recording browser events.
  */
 export class ClickstreamTracker {
-  private events: ClickstreamEvent[] = [];
+  private events: SessionStorageList<eventWithTimeAndSessionId>;
   private sessionId: string;
   private stopFn?: () => void;
   private config: ClickstreamConfig;
@@ -77,8 +36,10 @@ export class ClickstreamTracker {
     this.config = {
       samplingRate: 1,
       maskAllInputs: true,
+      maxEvents: 10,
       ...config,
     };
+    this.events = new SessionStorageList('clickstream-events', this.config.maxEvents);
   }
 
   /**
@@ -95,21 +56,20 @@ export class ClickstreamTracker {
 
     this.stopFn = rrweb.record({
       emit: (event: eventWithTime) => {
-        // todo(1): check if we need not to record full snapshot.
-        if (!this.isRecording || event.type === 2) {
-          // Don't record if stopped or if it's a full snapshot
+        if (!this.isRecording) {
           return;
         }
 
-        const clickstreamEvent: ClickstreamEvent = {
-          timestamp: event.timestamp,
-          type: this.mapEventType(event),
-          target: this.getEventTarget(event),
-          data: event.data as Record<string, unknown>,
-          sessionId: this.sessionId,
-        };
+        if (this.events.length >= this.config.maxEvents!) {
+          // flush events to remote.
+          this.flushEvents();
+          this.events.clear();
+        }
 
-        this.events.push(clickstreamEvent);
+        this.events.push({
+          ...event,
+          sessionId: this.sessionId,
+        });
       },
       sampling: {
         mousemove: this.config.samplingRate,
@@ -136,19 +96,11 @@ export class ClickstreamTracker {
   }
 
   /**
-   * Returns a copy of all recorded events.
-   * @returns An array of ClickstreamEvent objects representing all recorded interactions
-   */
-  public getEvents(): ClickstreamEvent[] {
-    return [...this.events];
-  }
-
-  /**
    * Removes all recorded events from memory. This does not stop the recording
    * if it is in progress.
    */
   public clearEvents(): void {
-    this.events = [];
+    this.events.clear();
   }
 
   /**
@@ -160,88 +112,32 @@ export class ClickstreamTracker {
   }
 
   /**
-   * Maps rrweb events to ClickstreamEvent types.
-   * @param event - The rrweb event
-   * @returns The corresponding ClickstreamEvent type
-   * @private
+   * Flushes the events to the remote server.
    */
-  private mapEventType(event: eventWithTime): ClickstreamEvent["type"] {
-    // Add the original event type for debugging
-    if (event.data && typeof event.data === "object") {
-      const data = event.data as Record<string, unknown>;
-      data.rrwebEventType = event.type;
-    }
-
-    // Special case for tests that simulate click events with type 7
-    if ((event.type as unknown as number) === 7) {
-      return "click";
-    }
-
-    // Handle each event type explicitly
-    if (event.type === EVENT_TYPE.IncrementalSnapshot) {
-      if (event.data && typeof event.data === "object") {
-        const data = event.data as Record<string, unknown>;
-        const source = data.source as number;
-
-        // Map IncrementalSource types using our constants
-        switch (source) {
-          case INCREMENTAL_SOURCE.MouseMove:
-            return "mousemove";
-          case INCREMENTAL_SOURCE.TouchMove:
-            return "touchmove";
-          case INCREMENTAL_SOURCE.Drag:
-            return "drag";
-          case INCREMENTAL_SOURCE.Scroll:
-            return "scroll";
-          case INCREMENTAL_SOURCE.ViewportResize:
-            return "resize";
-          case INCREMENTAL_SOURCE.Input:
-            return "input";
-          case INCREMENTAL_SOURCE.MouseInteraction:
-            return "click";
-          case INCREMENTAL_SOURCE.MediaInteraction:
-            return "input";
-          default:
-            console.warn(`Unhandled IncrementalSource: ${source}`);
-            return "unknown";
+  public flushEvents(): void {
+    if (this.config.remoteEndpoint) {
+      fetch(this.config.remoteEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          events: this.events.getAll(),
+        }), // in v1 we send uncompressed events.
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Network response was not ok: ${response.status}`);
         }
-      }
-      return "unknown";
+        return response.json();
+      })
+      .then(data => {
+        console.log('Events successfully sent to remote endpoint', data);
+      })
+      .catch(error => {
+        console.error('Error sending events to remote endpoint:', error);
+      });
     }
-
-    // Map EventType values using our constants
-    switch (true) {
-      case event.type === EVENT_TYPE.DomContentLoaded:
-        return "dom-content-loaded";
-      case event.type === EVENT_TYPE.Load:
-        return "load";
-      case event.type === EVENT_TYPE.Meta:
-        return "meta";
-      case event.type === EVENT_TYPE.Custom:
-        return "custom";
-      case event.type === EVENT_TYPE.Plugin:
-        return "plugin";
-      case event.type === EVENT_TYPE.FullSnapshot:
-        return "view";
-      default:
-        console.warn(`Unknown rrweb event type: ${event.type}`);
-        return "unknown";
-    }
-  }
-
-  /**
-   * Extracts the target element information from an rrweb event.
-   * @param event - The rrweb event containing target information
-   * @returns The target element identifier or undefined if not available
-   * @private
-   */
-  private getEventTarget(event: eventWithTime): string | undefined {
-    if (!event.data || typeof event.data !== "object") {
-      return undefined;
-    }
-
-    const data = event.data as Record<string, unknown>;
-    return (data.target as string) || undefined;
   }
 
   /**
@@ -251,5 +147,118 @@ export class ClickstreamTracker {
    */
   private generateSessionId(): string {
     return Math.random().toString(36).substring(2) + Date.now().toString(36);
+  }
+}
+
+/**
+ * A class that extends Array functionality and persists data to sessionStorage.
+ * Data will be automatically cleared when the browser is closed.
+ */
+export class SessionStorageList<T> {
+  private key: string;
+  private items: T[] = [];
+  private maxItems: number | undefined;
+
+  /**
+   * Creates a new SessionStorageList
+   * @param storageKey - The key to use for storing in sessionStorage
+   * @param maxItems - Optional maximum number of items to keep (newest items are preserved)
+   */
+  constructor(storageKey: string, maxItems = 9999) {
+    this.key = storageKey;
+    this.maxItems = maxItems;
+  }
+
+  /**
+   * Adds an item to the beginning of the list and updates storage
+   * @param item - The item to add
+   */
+  public push(item: T): void {
+    if (this.maxItems && this.items.length >= this.maxItems) {
+      this.items.shift();
+    }
+
+    this.items.push(item);
+    this.saveToStorage();
+  }
+
+  /**
+   * Adds an item to the beginning of the list and updates storage
+   * @param item - The item to add
+   */
+  public unshift(item: T): void {
+    this.items.unshift(item);
+    this.saveToStorage();
+  }
+
+  /**
+   * Removes the last item from the list and updates storage
+   * @returns The removed item or undefined if list is empty
+   */
+  public pop(): T | undefined {
+    if (this.items.length === 0) {
+      return undefined;
+    }
+    const item = this.items.pop();
+    this.saveToStorage();
+    return item;
+  }
+
+  /**
+   * Removes the first item from the list and updates storage
+   * @returns The removed item or undefined if list is empty
+   */
+  public shift(): T | undefined {
+    if (this.items.length === 0) {
+      return undefined;
+    }
+    const item = this.items.shift();
+    this.saveToStorage();
+    return item;
+  }
+
+  /**
+   * Removes all items from the list and clears storage
+   */
+  public clear(): void {
+    this.items = [];
+    this.saveToStorage();
+  }
+
+  /**
+   * Returns all items in the list
+   * @returns Array of all items
+   */
+  public getAll(): T[] {
+    return [...this.items];
+  }
+
+  /**
+   * Returns the number of items in the list
+   * @returns The item count
+   */
+  public get length(): number {
+    return this.items.length;
+  }
+
+  /**
+   * Returns an item at the specified index
+   * @param index - The index to retrieve
+   * @returns The item at the specified index or undefined
+   */
+  public get(index: number): T | undefined {
+    return this.items[index];
+  }
+
+  /**
+   * Saves items to sessionStorage
+   * @private
+   */
+  private saveToStorage(): void {
+    try {
+      sessionStorage.setItem(this.key, JSON.stringify(this.items));
+    } catch (error) {
+      console.error('Error saving to sessionStorage:', error);
+    }
   }
 }
