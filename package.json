@@ -1,6 +1,6 @@
 {
   "name": "clickstream-core",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Core library for tracking and analyzing clickstream data with TypeScript",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

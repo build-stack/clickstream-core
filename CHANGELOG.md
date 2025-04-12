@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/build-stack/clickstream-core/compare/v1.0.0...v1.1.0) (2025-04-12)
+
+
+### Features
+
+* update ClickstreamTracker to support remote event flushing and session management ([c714050](https://github.com/build-stack/clickstream-core/commit/c71405008c6c413d054555900ace3f3e91d69ee4))
+
 # 1.0.0 (2025-03-22)
 
 
