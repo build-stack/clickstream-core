@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/build-stack/clickstream-core/compare/v1.1.0...v1.2.0) (2025-04-12)
+
+
+### Features
+
+* add environmentId support to ClickstreamTracker for enhanced event tracking ([00fec1a](https://github.com/build-stack/clickstream-core/commit/00fec1a7dad47f6c6131c1a33a03ab372bad957e))
+
 # [1.1.0](https://github.com/build-stack/clickstream-core/compare/v1.0.0...v1.1.0) (2025-04-12)
 
 
