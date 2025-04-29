@@ -1,3 +1,11 @@
+# [1.3.0](https://github.com/build-stack/clickstream-core/compare/v1.2.1...v1.3.0) (2025-04-29)
+
+
+### Features
+
+* add React example application with Clickstream Tracker integration, including routing, form handling, and Tailwind CSS styling ([4ab2e9d](https://github.com/build-stack/clickstream-core/commit/4ab2e9d9df60cf19e05ada6921eed067a2db3ac8))
+* update Clickstream to version 1.2.0 with lz-string compression and production mode configuration ([d65ef8d](https://github.com/build-stack/clickstream-core/commit/d65ef8d71bdb0fe9a6341a48b3dabd1542eb06da))
+
 ## [1.2.1](https://github.com/build-stack/clickstream-core/compare/v1.2.0...v1.2.1) (2025-04-12)
 
 
