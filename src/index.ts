@@ -1,4 +1,5 @@
 import * as rrweb from "rrweb";
+import { compress } from 'lz-string';
 import type { eventWithTime, blockClass, maskTextClass } from "@rrweb/types";
 
 export interface ClickstreamConfig {
@@ -22,8 +23,8 @@ type AnnotatedEvent = eventWithTime & {
  * A class that tracks user interactions and creates a clickstream of events
  * using the rrweb library for recording browser events.
  */
-export class ClickstreamTracker {
-  private events: SessionStorageList<AnnotatedEvent>;
+export class Clickstream {
+  private events: SessionStorageList<eventWithTime>;
   private sessionId: string;
   private stopFn?: () => void;
   private config: ClickstreamConfig;
@@ -51,9 +52,11 @@ export class ClickstreamTracker {
    * is called.
    */
   public start(): void {
-    if (this.stopFn) {
+    if (this.stopFn || this.isRecording) {
       return;
     }
+
+    console.log('🎬 Starting Clickstream');
 
     this.isRecording = true;
 
@@ -69,11 +72,7 @@ export class ClickstreamTracker {
           this.events.clear();
         }
 
-        this.events.push({
-          ...event,
-          sessionId: this.sessionId,
-          environmentId: this.config.environmentId
-        });
+        this.events.push(event);
       },
       sampling: {
         mousemove: this.config.samplingRate,
@@ -108,6 +107,14 @@ export class ClickstreamTracker {
   }
 
   /**
+   * Returns all recorded events.
+   * @returns Array of all recorded events
+   */
+  public getEvents(): eventWithTime[] {
+    return this.events.getAll();
+  }
+
+  /**
    * Returns the current session identifier.
    * @returns The unique session ID for the current recording session
    */
@@ -120,14 +127,19 @@ export class ClickstreamTracker {
    */
   public flushEvents(): void {
     if (this.config.remoteEndpoint) {
+      const events = this.events.getAll()
+      this.events.clear();
+
       fetch(this.config.remoteEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Clickstream-Environment-Id': this.config.environmentId || '',
+          'X-Clickstream-Session-Id': this.sessionId || '',
         },
         body: JSON.stringify({
-          events: this.events.getAll(),
-        }), // in v1 we send uncompressed events.
+          events: events.map(_ => compress(JSON.stringify(_))),
+        }),
       })
       .then(response => {
         if (!response.ok) {
@@ -297,3 +309,5 @@ export class SessionStorageList<T> {
     }
   }
 }
+
+export default Clickstream;

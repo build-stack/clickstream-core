@@ -2,12 +2,16 @@ const path = require('path');
 
 module.exports = {
   entry: './src/index.ts',
+  mode: 'production',
   output: {
     filename: 'clickstream.min.js',
     path: path.resolve(__dirname, 'dist'),
-    library: 'Clickstream',
-    libraryTarget: 'umd',
-    globalObject: 'this'
+    library: {
+      name: 'Clickstream',
+      type: 'umd',
+    },
+    globalObject: 'this',
+    umdNamedDefine: true
   },
   module: {
     rules: [

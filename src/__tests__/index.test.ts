@@ -1,4 +1,4 @@
-import { ClickstreamTracker } from "../index";
+import { Clickstream } from "../index";
 
 jest.mock("rrweb", () => {
   const mockRecord = jest.fn().mockImplementation(({ emit }): (() => void) => {
@@ -10,12 +10,12 @@ jest.mock("rrweb", () => {
   return { record: mockRecord };
 });
 
-describe("ClickstreamTracker", () => {
-  let tracker: ClickstreamTracker;
+describe("Clickstream", () => {
+  let tracker: Clickstream;
   let mockRecord: jest.Mock;
 
   beforeEach(() => {
-    tracker = new ClickstreamTracker();
+    tracker = new Clickstream();
     mockRecord = (jest.requireMock("rrweb") as { record: jest.Mock }).record;
     mockRecord.mockClear();
   });
@@ -39,7 +39,7 @@ describe("ClickstreamTracker", () => {
 
     // Simulate a click event
     emit({
-      type: 7,
+      type: 7, // This would be mapped to "click" in the old implementation
       timestamp: Date.now(),
       data: {
         target: "button",
@@ -48,7 +48,8 @@ describe("ClickstreamTracker", () => {
 
     const events = tracker.getEvents();
     expect(events.length).toBe(1);
-    expect(events[0].type).toBe("click");
+    // Instead of checking for string type, check for numeric type
+    expect(events[0].type).toBe(7);
   });
 
   it("should stop recording events", async () => {
@@ -107,7 +108,7 @@ describe("ClickstreamTracker", () => {
       blockSelector: ".private",
     };
 
-    tracker = new ClickstreamTracker(config);
+    tracker = new Clickstream(config);
     tracker.start();
 
     expect(mockRecord).toHaveBeenCalledWith(
@@ -140,6 +141,7 @@ describe("ClickstreamTracker", () => {
 
     const events = tracker.getEvents();
     expect(events.length).toBe(1);
-    expect(events[0].type).toBe("unknown");
+    // Check for the numeric type instead of the string "unknown"
+    expect(events[0].type).toBe(999);
   });
 });
