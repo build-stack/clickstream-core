@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/build-stack/clickstream-core/compare/v1.3.0...v1.4.0) (2025-05-01)
+
+
+### Features
+
+* enhance ClickstreamTracker with event flushing and visibility handling, including debounce mechanism and cleanup of event listeners ([a81499f](https://github.com/build-stack/clickstream-core/commit/a81499f7d76f37a161b3e3e20de0a876a44dd0df))
+
 # [1.3.0](https://github.com/build-stack/clickstream-core/compare/v1.2.1...v1.3.0) (2025-04-29)
 
 
