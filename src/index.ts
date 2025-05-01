@@ -29,6 +29,10 @@ export class Clickstream {
   private stopFn?: () => void;
   private config: ClickstreamConfig;
   private isRecording: boolean = false;
+  private unloadHandler: () => void;
+  private visibilityHandler: () => void;
+  private lastFlushTime: number = 0;
+  private flushDebounceMs: number = 50;
 
   /**
    * Creates a new instance of ClickstreamTracker.
@@ -44,6 +48,41 @@ export class Clickstream {
       ...config,
     };
     this.events = new SessionStorageList('clickstream-events', this.config.maxEvents);
+    
+    // Define event handlers
+    this.unloadHandler = () => {
+      this.flushEvents();
+    };
+    
+    this.visibilityHandler = () => {
+      if (document.visibilityState === 'hidden') {
+        this.flushEvents();
+      }
+    };
+    
+    // Add event listeners for page unload and visibility change
+    this.setupEventListeners();
+  }
+
+  /**
+   * Sets up event listeners for page unload and visibility change
+   * @private
+   */
+  private setupEventListeners(): void {
+    // Handle browser close or navigation away
+    window.addEventListener('beforeunload', this.unloadHandler);
+
+    // Handle tab visibility change (covers some mobile cases and tab switching)
+    document.addEventListener('visibilitychange', this.visibilityHandler);
+  }
+
+  /**
+   * Removes event listeners
+   * @private
+   */
+  private cleanupEventListeners(): void {
+    window.removeEventListener('beforeunload', this.unloadHandler);
+    document.removeEventListener('visibilitychange', this.visibilityHandler);
   }
 
   /**
@@ -67,9 +106,7 @@ export class Clickstream {
         }
 
         if (this.events.length >= this.config.maxEvents!) {
-          // flush events to remote.
           this.flushEvents();
-          this.events.clear();
         }
 
         this.events.push(event);
@@ -96,6 +133,9 @@ export class Clickstream {
       this.stopFn();
       this.stopFn = undefined;
     }
+    
+    // Clean up event listeners when stopping
+    this.cleanupEventListeners();
   }
 
   /**
@@ -126,10 +166,17 @@ export class Clickstream {
    * Flushes the events to the remote server.
    */
   public flushEvents(): void {
-    if (this.config.remoteEndpoint) {
-      const events = this.events.getAll()
-      this.events.clear();
-
+    const now = Date.now();
+    // Prevent multiple flushes within debounce period
+    if (now - this.lastFlushTime < this.flushDebounceMs) {
+      console.log('Skipping flush due to debounce');
+      return;
+    }
+    
+    this.lastFlushTime = now;
+    const events = this.events.getAll();
+    
+    if (this.config.remoteEndpoint && events.length > 0) {
       fetch(this.config.remoteEndpoint, {
         method: 'POST',
         headers: {
@@ -145,13 +192,13 @@ export class Clickstream {
         if (!response.ok) {
           throw new Error(`Network response was not ok: ${response.status}`);
         }
-        return response.json();
-      })
-      .then(data => {
-        console.log('Events successfully sent to remote endpoint', data);
+        // return response.json();
       })
       .catch(error => {
         console.error('Error sending events to remote endpoint:', error);
+      })
+      .finally(() => {
+        this.clearEvents();
       });
     }
   }

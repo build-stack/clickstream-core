@@ -22,6 +22,7 @@ function App() {
         maskAllInputs: false,
         maskTextClass: 'body',
         remoteEndpoint: 'http://localhost:3001/events',
+        maxEvents: 100,
       });
       isRecording.current.start();
     }
