@@ -12,12 +12,27 @@ export interface ClickstreamConfig {
   remoteEndpoint?: string;
   maxEvents?: number;
   environmentId?: string;
+  captureClientInfo?: boolean;
 }
 
-type AnnotatedEvent = eventWithTime & {
-  sessionId: string;
-  environmentId?: string;
-};
+interface ClientInfo {
+  userAgent: string;
+  language: string;
+  screenResolution: string;
+  timezone: string;
+  platform: string;
+  vendor: string;
+  cookiesEnabled: boolean;
+  doNotTrack: boolean;
+  colorDepth: number;
+  deviceMemory?: number;
+  hardwareConcurrency?: number;
+  connection?: {
+    effectiveType?: string;
+    rtt?: number;
+    downlink?: number;
+  };
+}
 
 /**
  * A class that tracks user interactions and creates a clickstream of events
@@ -98,6 +113,12 @@ export class Clickstream {
     console.log('🎬 Starting Clickstream');
 
     this.isRecording = true;
+
+    // Capture client info if enabled
+    if (this.config.captureClientInfo) {
+      const clientInfoEvent = this.createClientInfoEvent();
+      this.events.push(clientInfoEvent);
+    }
 
     this.stopFn = rrweb.record({
       emit: (event: eventWithTime) => {
@@ -241,6 +262,43 @@ export class Clickstream {
    */
   private generateSessionId(): string {
     return Math.random().toString(36).substring(2) + Date.now().toString(36);
+  }
+
+  private captureClientInfo(): ClientInfo {
+    const nav = navigator || {};
+    const screen = window.screen || {};
+    const connection = (nav as any).connection || {};
+
+    return {
+      userAgent: nav.userAgent || 'unknown',
+      language: nav.language || 'unknown',
+      screenResolution: `${screen.width || 0}x${screen.height || 0}`,
+      timezone: Intl?.DateTimeFormat?.()?.resolvedOptions?.()?.timeZone || 'unknown',
+      platform: nav.platform || 'unknown',
+      vendor: nav.vendor || 'unknown',
+      cookiesEnabled: nav.cookieEnabled || false,
+      doNotTrack: nav.doNotTrack === '1',
+      colorDepth: screen.colorDepth || 24,
+      deviceMemory: (nav as any).deviceMemory || undefined,
+      hardwareConcurrency: nav.hardwareConcurrency || undefined,
+      connection: connection ? {
+        effectiveType: connection.effectiveType || undefined,
+        rtt: connection.rtt || undefined,
+        downlink: connection.downlink || undefined
+      } : undefined
+    };
+  }
+
+  private createClientInfoEvent(): eventWithTime {
+    const clientInfo = this.captureClientInfo();
+    return {
+      type: 5, // EventType.Custom
+      data: {
+        tag: 'clientInfo',
+        payload: clientInfo
+      },
+      timestamp: Date.now()
+    };
   }
 }
 
