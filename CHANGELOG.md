@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/build-stack/clickstream-core/compare/v1.4.0...v1.5.0) (2025-05-10)
+
+
+### Features
+
+* update Clickstream to version 1.3.0, add client info capture feature and enhance npm scripts ([a038202](https://github.com/build-stack/clickstream-core/commit/a038202e077438904243485f7d975e5c2620082f))
+
 # [1.4.0](https://github.com/build-stack/clickstream-core/compare/v1.3.0...v1.4.0) (2025-05-01)
 
 
